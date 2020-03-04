@@ -3,7 +3,7 @@ import networkx as nx
 import numpy as np
 import multiprocessing as mp
 import random
-
+from sklearn.model_selection import KFold
 
 
 # # approximate
@@ -36,10 +36,14 @@ def get_edge_mask_link_negative(mask_link_positive, num_nodes, num_negtive_edges
     return mask_link_negative
 
 def resample_edge_mask_link_negative(data):
-    data.mask_link_negative_train = get_edge_mask_link_negative(data.mask_link_positive_train, num_nodes=data.num_nodes,
-                                                      num_negtive_edges=data.mask_link_positive_train.shape[1])
-    data.mask_link_negative_val = get_edge_mask_link_negative(data.mask_link_positive, num_nodes=data.num_nodes,
-                                                      num_negtive_edges=data.mask_link_positive_val.shape[1])
+    data.mask_link_negative_train=[]
+    data.mask_link_negative_val=[]
+    # data.mask_link_negative_test=[]
+    for k in range(len(data.mask_link_positive_train)):
+        data.mask_link_negative_train.append(get_edge_mask_link_negative(data.mask_link_positive_train[k], num_nodes=data.num_nodes,
+                                                          num_negtive_edges=data.mask_link_positive_train[k].shape[1]))
+        data.mask_link_negative_val.append(get_edge_mask_link_negative(data.mask_link_positive, num_nodes=data.num_nodes,
+                                                          num_negtive_edges=data.mask_link_positive_val[k].shape[1]))
     data.mask_link_negative_test = get_edge_mask_link_negative(data.mask_link_positive, num_nodes=data.num_nodes,
                                                      num_negtive_edges=data.mask_link_positive_test.shape[1])
 
@@ -95,11 +99,24 @@ def split_edges(edges, remove_ratio, connected=False):
     else:
         split1 = int((1-remove_ratio)*e)
         split2 = int((1-remove_ratio/2)*e)
-        edges_train = edges[:,:split1]
-        edges_val = edges[:,split1:split2]
+        # edges_train = edges[:,:split1]
+        # edges_val = edges[:,split1:split2]
+        # print(edges_train.shape)
+        # print(edges_val.shape)
+        edges_train_val= edges[:,:split2]
+        print(edges_train_val.shape)
+        kf = KFold(n_splits=5)
+        edges_train_array=[]
+        edges_valid_array=[]
+        edges_train_val_transpose=np.transpose(edges_train_val)
+        for train_index, test_index in kf.split(edges_train_val_transpose):
+            print("TRAIN:", str(train_index.shape), "TEST:", str(test_index.shape))
+            edges_train_array.append(np.transpose(edges_train_val_transpose[train_index]))
+            edges_valid_array.append(np.transpose(edges_train_val_transpose[train_index]))
+        # exit()
         edges_test = edges[:,split2:]
 
-    return edges_train, edges_val, edges_test
+    return edges_train_array, edges_valid_array, edges_test
 
 
 
@@ -219,4 +236,6 @@ def preselect_anchor(data, layer_num=1, anchor_num=32, anchor_size_num=4, device
     data.anchor_set_indicator = np.zeros((layer_num, anchor_num, data.num_nodes), dtype=int)
 
     anchorset_id = get_random_anchorset(data.num_nodes,c=1)
+    data.dists_max=[]
+    data.dists_argmax=[] 
     data.dists_max, data.dists_argmax = get_dist_max(anchorset_id, data.dists, device)

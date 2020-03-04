@@ -83,31 +83,62 @@ def get_tg_dataset(args, dataset_name, use_cache=True, remove_feature=False):
     else:
         data_list = []
         dists_list = []
-        dists_removed_list = []
-        links_train_list = []
-        links_val_list = []
+        dists_removed_list = [[] for i in range(5)]
+        links_train_list = [[] for i in range(5)]
+        links_val_list = [[] for i in range(5)]
         links_test_list = []
         for i, data in enumerate(dataset):
             if 'link' in args.task:
                 get_link_mask(data, args.remove_link_ratio, resplit=True,
                               infer_link_positive=True if args.task == 'link' else False)
-            links_train_list.append(data.mask_link_positive_train)
-            links_val_list.append(data.mask_link_positive_val)
+            for k in range(5):
+                links_train_list[k].append(data.mask_link_positive_train[k])
+                links_val_list[k].append(data.mask_link_positive_val[k])
             links_test_list.append(data.mask_link_positive_test)
+            data_array = []
             if args.task=='link':
-                dists_removed = precompute_dist_data(data.mask_link_positive_train, data.num_nodes,
-                                                     approximate=args.approximate)
-                dists_removed_list.append(dists_removed)
-                data.dists = torch.from_numpy(dists_removed).float()
-                data.edge_index = torch.from_numpy(duplicate_edges(data.mask_link_positive_train)).long()
+                # data.dists=[]
+                for k in range(5):
+                    dists_removed = precompute_dist_data(data.mask_link_positive_train[k], data.num_nodes,
+                                                         approximate=args.approximate)
+                    dists_removed_list[k].append(dists_removed)
+                    
+                    # for k in range(5):
+                    data1=Data(x=data.x,edge_index=torch.from_numpy(duplicate_edges(data.mask_link_positive_train[k])).long())
+                    data1.dists= torch.from_numpy(dists_removed).float()
+                    data1.mask_link_positive=data.mask_link_positive
+                    data1.mask_link_positive_train=data.mask_link_positive_train[k]
+                    data1.mask_link_positive_val=data.mask_link_positive_val[k]
+                    data1.mask_link_positive_test=data.mask_link_positive_test
+                    data1.mask_link_negative_test=data.mask_link_negative_test
+                    data1.mask_link_negative_train=data.mask_link_negative_train[k]
+                    data1.mask_link_negative_val=data.mask_link_negative_val[k]
+                    # data.edge_index.append()
+                    data_array.append(data1)
 
             else:
                 dists = precompute_dist_data(data.edge_index.numpy(), data.num_nodes, approximate=args.approximate)
                 dists_list.append(dists)
-                data.dists = torch.from_numpy(dists).float()
+                for k in range(5):
+                    data1=Data(x=data.x,edge_index=torch.from_numpy(duplicate_edges(data.mask_link_positive_train[k])).long())
+                    data1.dists = torch.from_numpy(dists).float()
+                    data1.mask_link_positive=data.mask_link_positive
+                    data1.mask_link_positive_train=data.mask_link_positive_train[k]
+                    data1.mask_link_positive_val=data.mask_link_positive_val[k]
+                    data1.mask_link_positive_test=data.mask_link_positive_test
+                    data1.mask_link_negative_test=data.mask_link_negative_test
+                    data1.mask_link_negative_train=data.mask_link_negative_train[k]
+                    data1.mask_link_negative_val=data.mask_link_negative_val[k]
+                    # data.edge_index.append()
+                    data_array.append(data1)
             if remove_feature:
                 data.x = torch.ones((data.x.shape[0],1))
-            data_list.append(data)
+            # print(data_array[0])
+            # # data_array=[]
+
+            # print(data_array[0].num_edges)
+            # exit()
+            data_list.append(data_array)
 
         with open(f1_name, 'wb') as f1, \
             open(f2_name, 'wb') as f2, \
